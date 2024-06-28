@@ -1,0 +1,4 @@
+/vendor/
+/uploads/
+.idea/
+settings.php
