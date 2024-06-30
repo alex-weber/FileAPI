@@ -75,8 +75,10 @@ class app
 
         $storagePath = $this->getStoragePath();
         $serverHost = $_SERVER['HTTP_HOST'];
+        // Check if HTTPS is set and not empty in the $_SERVER array
+        $protocol = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
 
-        $this->publicURL = "https://$serverHost/$storagePath$filename";
+        $this->publicURL = "$protocol://$serverHost/$storagePath$filename";
     }
 
     /**
@@ -139,8 +141,8 @@ class app
     {
         // Define the storage path
         if (isset($this->data['path']) && $this->data['path'] === 'custom')
-            $storagePath = 'uploads/custom/';
-        else $storagePath = 'uploads/'.date('Ymd/');
+            $storagePath = UPLOAD_ROOT_DIR.'/custom/';
+        else $storagePath = UPLOAD_ROOT_DIR.'/'.date('Ymd/');
 
         return $storagePath;
     }
