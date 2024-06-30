@@ -1,12 +1,16 @@
 <?php
 
+require_once 'settings.php';
+
 /**
  * @param $dir
  * @return void
  */
 function deleteOldFiles($dir): void {
+
     $now = time();
-    $ageInSeconds = 7 * 24 * 60 * 60; // approximate one week in seconds
+    $ageInSeconds = MAX_FILE_AGE;
+    $day = 3600 * 24;
 
     $files = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -16,17 +20,18 @@ function deleteOldFiles($dir): void {
     foreach ($files as $fileInfo) {
         if (!$fileInfo->isFile()) continue;
         $filePath = $fileInfo->getRealPath();
-        if (str_contains($filePath, 'custom')) continue;
+        //do not delete custom and old files
+        if (str_contains($filePath, 'custom') ||
+            str_contains($filePath, '202406')) continue;
         $fileAge = $now - $fileInfo->getCTime(); // get creation time of the file
         if ($fileAge > $ageInSeconds) {
-            echo "$index. $filePath <br> \n";
-            //unlink($filePath);
             $index++;
+            echo "$index. $filePath \n";
+            unlink($filePath);
         }
     }
+    echo "$index files deleted. \n";
 }
 
-// start
-
-$directory = 'uploads/';
-deleteOldFiles($directory);
+// start job
+deleteOldFiles(UPLOAD_ROOT_DIR);
