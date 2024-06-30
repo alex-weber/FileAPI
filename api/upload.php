@@ -1,10 +1,12 @@
 <?php
 //load settings
-require_once 'settings.php';
+require_once '../settings.php';
 //load the app
-require_once 'app.php';
-use \App\app;
-$app = new app();
+require_once '../src/controller/App.php';
+
+use App\src\controller\App;
+
+$app = new App();
 
 try {
     $app->upload();

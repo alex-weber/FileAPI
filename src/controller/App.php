@@ -1,12 +1,12 @@
 <?php
 
-namespace App;
+namespace App\src\controller;
 
 /**
  * file handler.
  * currently only uploader
  */
-class app
+class App
 {
     private array $data;
 
@@ -30,11 +30,15 @@ class app
      */
     private function getRequest (): void
     {
+
         // Set headers to allow cross-origin requests (CORS)
         header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Methods: POST");
         header("Access-Control-Allow-Headers: Content-Type");
         header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+            $this->sendError(405, 'Request method not allowed');
+        //decode JSON to array and store it into the private variable
         $this->setData(file_get_contents("php://input"));
     }
 
@@ -53,7 +57,7 @@ class app
         $filePath = $this->getFilePath();
         $fullPath = $filePath.$filename;
         // Save the file
-        if (file_put_contents($fullPath, $this->imageData) === false)
+        if (file_put_contents($_SERVER['DOCUMENT_ROOT'].'/'.$fullPath, $this->imageData) === false)
             $this->sendError(500, 'Cannot write to file');
 
         //$storagePath = $this->getStoragePath();
@@ -61,7 +65,7 @@ class app
         // Check if HTTPS is set and not empty in the $_SERVER array
         $protocol = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
 
-        $this->publicURL = "$protocol://$serverHost/$fullPath";
+        $this->publicURL = "$protocol://$serverHost/$filePath$filename";
     }
 
     /**
@@ -69,8 +73,6 @@ class app
      */
     private function validateRequest(): void
     {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-            $this->sendError(405, 'Request method not allowed');
         //check if the API key is valid
         if (!isset($this->data['key']))
             $this->sendError(400, 'API key not provided');
@@ -160,7 +162,7 @@ class app
 
         if (!file_exists($filePath))
         {
-            $dirCreated = mkdir($filePath, 0755, true);
+            $dirCreated = mkdir($_SERVER['DOCUMENT_ROOT'].'/'. $filePath, 0755, true);
             if (!$dirCreated)
                 $this->sendError(500, 'Unable to create directory');
         }
