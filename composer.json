@@ -1,6 +1,9 @@
 {
-    "require": {
-        "guzzlehttp/guzzle": "^7.8",
-      "ext-fileinfo": "*"
-    }
+  "name": "tortunbator/file-api",
+  "version": "1.0.0",
+  "description": "file hosting service with API upload",
+  "keywords": ["api", "file", "hosting"],
+  "require": {
+    "ext-fileinfo": "*"
+  }
 }
