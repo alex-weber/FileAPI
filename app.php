@@ -159,7 +159,11 @@ class app
         else $filePath = UPLOAD_ROOT_DIR.'/'.date('Ymd/');
 
         if (!file_exists($filePath))
-            mkdir($filePath, 0755, true);
+        {
+            $dirCreated = mkdir($filePath, 0755, true);
+            if (!$dirCreated)
+                $this->sendError(500, 'Unable to create directory');
+        }
 
         return $filePath;
     }
@@ -175,8 +179,5 @@ class app
         if ($this->imageData === false)
             $this->sendError(400, 'Invalid base64 image');
     }
-
-
-
 
 }
