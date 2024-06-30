@@ -122,6 +122,10 @@ class App
     {
         $data = json_decode($postData, true);
 
+        if (strlen($data['image']) > MAX_FILE_SIZE)
+            $this->sendError(400,
+                'Max file size of '.MAX_FILE_SIZE.' bytes exceeded');
+
         if (json_last_error() !== JSON_ERROR_NONE)
             $this->sendError(400, 'Invalid JSON');
 
@@ -160,9 +164,10 @@ class App
             $filePath = UPLOAD_ROOT_DIR.'/custom/';
         else $filePath = UPLOAD_ROOT_DIR.'/'.date('Ymd/');
 
-        if (!file_exists($filePath))
+        $root = $_SERVER['DOCUMENT_ROOT'].'/';
+        if (!file_exists($root.$filePath))
         {
-            $dirCreated = mkdir($_SERVER['DOCUMENT_ROOT'].'/'. $filePath, 0755, true);
+            $dirCreated = mkdir($root.$filePath, 0755, true);
             if (!$dirCreated)
                 $this->sendError(500, 'Unable to create directory');
         }
