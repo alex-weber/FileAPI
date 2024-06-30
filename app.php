@@ -25,7 +25,7 @@ class app
     }
 
     /**
-     * set request object to $this->data
+     * set request object to $this->data array
      * @return void
      */
     private function getRequest (): void
@@ -41,6 +41,51 @@ class app
     /**
      * @return void
      */
+    private function handleRequest(): void
+    {
+        $this->validateRequest();
+
+        // Decode the base64 image
+        $this->getBase64ImageData();
+
+        // get path and filename
+        $filename = $this->getFilename();
+        $filePath = $this->getFilePath();
+        $fullPath = $filePath.$filename;
+        // Save the file
+        if (file_put_contents($fullPath, $this->imageData) === false)
+            $this->sendError(500, 'Cannot write to file');
+
+        //$storagePath = $this->getStoragePath();
+        $serverHost = $_SERVER['HTTP_HOST'];
+        // Check if HTTPS is set and not empty in the $_SERVER array
+        $protocol = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
+
+        $this->publicURL = "$protocol://$serverHost/$fullPath";
+    }
+
+    /**
+     * @return void
+     */
+    private function validateRequest(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+            $this->sendError(405, 'Request method not allowed');
+        //check if the API key is valid
+        if (!isset($this->data['key']))
+            $this->sendError(400, 'API key not provided');
+        $key = $this->data['key'];
+        if ($key !== API_KEY)
+            $this->sendError(400, 'Invalid API key');
+
+        // Check if the image data and filename are present
+        if (!isset($this->data['image']))
+            $this->sendError(400, 'Missing image');
+    }
+
+    /**
+     * @return void
+     */
     private function sendResponse(): void
     {
         //send json response
@@ -51,34 +96,6 @@ class app
             'url' => $this->publicURL
         ]);
         exit();
-    }
-
-    /**
-     * @return void
-     */
-    private function handleRequest(): void
-    {
-        $this->validateRequest();
-
-        // Decode the base64 image
-        $this->getBase64ImageData();
-
-        // get filename
-        $filename = $this->getFilename();
-
-        // Save the image
-        $filePath = $this->getFilePath();
-        $fullPath = $filePath . $filename;
-
-        if (file_put_contents($fullPath, $this->imageData) === false)
-            $this->sendError(500, 'Cannot write to file');
-
-        $storagePath = $this->getStoragePath();
-        $serverHost = $_SERVER['HTTP_HOST'];
-        // Check if HTTPS is set and not empty in the $_SERVER array
-        $protocol = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
-
-        $this->publicURL = "$protocol://$serverHost/$storagePath$filename";
     }
 
     /**
@@ -110,6 +127,9 @@ class app
     }
 
     /**
+     * ALLOWED_FILE_EXT array
+     * generates a unique filename, keeps the extension
+     *
      * @return string
      */
     private function getFilename(): string
@@ -118,18 +138,12 @@ class app
         $fileInfo = finfo_open(FILEINFO_MIME_TYPE);
         $mimeType = finfo_buffer($fileInfo, $this->imageData);
         finfo_close($fileInfo);
-        $mimeTypesToExtensions = [
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/gif' => 'gif',
-            'image/webp' => 'webp'
-        ];
 
-        if (!array_key_exists($mimeType, $mimeTypesToExtensions))
+        if (!array_key_exists($mimeType, ALLOWED_FILE_EXT))
             $this->sendError(400, 'Invalid mime type');
 
         // Get the file extension
-        $fileExtension = $mimeTypesToExtensions[$mimeType];
+        $fileExtension = ALLOWED_FILE_EXT[$mimeType];
 
         return uniqid().'.'.$fileExtension;
     }
@@ -137,29 +151,17 @@ class app
     /**
      * @return string
      */
-    private function getStoragePath(): string
+    private function getFilePath(): string
     {
         // Define the storage path
         if (isset($this->data['path']) && $this->data['path'] === 'custom')
-            $storagePath = UPLOAD_ROOT_DIR.'/custom/';
-        else $storagePath = UPLOAD_ROOT_DIR.'/'.date('Ymd/');
+            $filePath = UPLOAD_ROOT_DIR.'/custom/';
+        else $filePath = UPLOAD_ROOT_DIR.'/'.date('Ymd/');
 
-        return $storagePath;
-    }
+        if (!file_exists($filePath))
+            mkdir($filePath, 0755, true);
 
-    /**
-     * @return string
-     */
-    private function getFilePath(): string
-    {
-        $storagePath = $this->getStoragePath();
-
-        if (!file_exists($storagePath))
-        {
-            mkdir($storagePath, 0755, true);
-        }
-
-        return $storagePath;
+        return $filePath;
     }
 
     /**
@@ -171,29 +173,10 @@ class app
         // Decode the base64 image
         $this->imageData = base64_decode($base64Image);
         if ($this->imageData === false)
-        {
             $this->sendError(400, 'Invalid base64 image');
-        }
     }
 
-    /**
-     * @return void
-     */
-    private function validateRequest(): void
-    {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-            $this->sendError(405, 'Request method not allowed');
-        //check if the API key is valid
-        if (!isset($this->data['key']))
-            $this->sendError(400, 'API key not provided');
-        $key = $this->data['key'];
-        if ($key !== API_KEY)
-            $this->sendError(400, 'Invalid API key');
 
-        // Check if the image data and filename are present
-        if (!isset($this->data['image']))
-            $this->sendError(400, 'Missing image');
-    }
 
 
 }
