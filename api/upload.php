@@ -11,7 +11,7 @@ $app = new App();
 try {
     $app->upload();
 } catch (Exception $e) {
-    error_log($e->getMessage(), 3);
+    error_log($e->getMessage(), 3, '../logs/errors.log');
 }
 
 
