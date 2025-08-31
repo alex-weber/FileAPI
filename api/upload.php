@@ -13,10 +13,3 @@ try {
 } catch (Exception $e) {
     error_log($e->getMessage(), 3, '../logs/error.log');
 }
-
-
-
-
-
-
-
