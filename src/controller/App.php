@@ -161,7 +161,7 @@ class App
     {
         // Define the storage path
         if (isset($this->data['path']) && $this->data['path'] === 'custom')
-            $filePath = UPLOAD_ROOT_DIR.'/custom/';
+            $filePath = UPLOAD_ROOT_DIR.'/custom/'.date('Ymd/');
         else $filePath = UPLOAD_ROOT_DIR.'/'.date('Ymd/');
 
         $root = $_SERVER['DOCUMENT_ROOT'].'/';
