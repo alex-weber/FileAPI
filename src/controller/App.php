@@ -2,13 +2,15 @@
 
 namespace App\src\controller;
 
+use JetBrains\PhpStorm\NoReturn;
+
 /**
  * file handler.
  * currently only uploader
  */
 class App
 {
-    private array $data;
+    private array $data = [];
 
     private string $imageData;
 
@@ -19,53 +21,172 @@ class App
      */
     public function upload(): void
     {
-        $this->getRequest();
-        $this->handleRequest();
+        $this->setCorsHeaders();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+            $this->sendError(405, 'Request method not allowed');
+
+        // Branch on the request content type:
+        //  - application/json  -> legacy base64-in-JSON path (buffered in memory)
+        //  - anything else     -> raw binary body streamed straight to disk
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (stripos($contentType, 'application/json') === 0)
+            $this->handleJsonRequest();
+        else
+            $this->handleStreamRequest();
+
         $this->sendResponse();
     }
 
     /**
-     * set request object to $this->data array
      * @return void
      */
-    private function getRequest (): void
+    private function setCorsHeaders(): void
     {
-
         // Set headers to allow cross-origin requests (CORS)
         header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Methods: POST");
-        header("Access-Control-Allow-Headers: Content-Type");
+        header("Access-Control-Allow-Headers: Content-Type, X-Api-Key");
         header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-            $this->sendError(405, 'Request method not allowed');
-        //decode JSON to array and store it into the private variable
-        $this->setData(file_get_contents("php://input"));
     }
 
     /**
+     * Legacy path: JSON body carrying a base64-encoded image.
+     * The whole payload is buffered in memory.
      * @return void
      */
-    private function handleRequest(): void
+    private function handleJsonRequest(): void
     {
+        //decode JSON to array and store it into the private variable
+        $this->setData(file_get_contents("php://input"));
+
         $this->validateRequest();
 
         // Decode the base64 image
         $this->getBase64ImageData();
 
         // get path and filename
-        $filename = $this->getFilename();
         $filePath = $this->getFilePath();
+        $filename = $this->getFilename();
         $fullPath = $filePath.$filename;
         // Save the file
         if (file_put_contents($_SERVER['DOCUMENT_ROOT'].'/'.$fullPath, $this->imageData) === false)
             $this->sendError(500, 'Cannot write to file');
 
-        //$storagePath = $this->getStoragePath();
+        $this->publicURL = $this->buildPublicURL($filePath, $filename);
+    }
+
+    /**
+     * Streaming path: raw binary request body copied to disk in fixed-size
+     * chunks, so peak memory stays flat regardless of file size.
+     *
+     * Metadata that used to live in the JSON body now travels out-of-band:
+     *  - API key via the X-Api-Key header
+     *  - optional path hint via the ?path=custom query parameter
+     * @return void
+     */
+    private function handleStreamRequest(): void
+    {
+        // Authenticate before reading the body.
+        $key = $_SERVER['HTTP_X_API_KEY'] ?? '';
+        if ($key !== API_KEY)
+            $this->sendError(400, 'Invalid API key');
+
+        // Path hint is the only piece of "data" the stream path understands.
+        $this->data['path'] = (($_GET['path'] ?? '') === 'custom') ? 'custom' : null;
+
+        $filePath = $this->getFilePath();
+        $root = $_SERVER['DOCUMENT_ROOT'].'/';
+
+        // Stream to a temp file first; rename to the final name once we know
+        // its mime type (and therefore extension) and that it is valid.
+        $tmpPath = $root.$filePath.uniqid('tmp_', true).'.part';
+
+        $in = fopen('php://input', 'rb');
+        if ($in === false)
+            $this->sendError(400, 'Cannot read input stream');
+
+        $out = fopen($tmpPath, 'wb');
+        if ($out === false) {
+            fclose($in);
+            $this->sendError(500, 'Cannot write to file');
+        }
+
+        $written = $this->copyStream($in, $out, $tmpPath);
+        fclose($in);
+        fclose($out);
+
+        if ($written === 0) {
+            @unlink($tmpPath);
+            $this->sendError(400, 'Missing image');
+        }
+
+        // Detect the mime type from the file on disk, not from memory.
+        $mimeType = finfo_file(finfo_open(FILEINFO_MIME_TYPE), $tmpPath);
+        if (!array_key_exists($mimeType, ALLOWED_FILE_EXT)) {
+            @unlink($tmpPath);
+            $this->sendError(400, 'Invalid mime type');
+        }
+
+        $filename = uniqid().'.'.ALLOWED_FILE_EXT[$mimeType];
+        if (!rename($tmpPath, $root.$filePath.$filename)) {
+            @unlink($tmpPath);
+            $this->sendError(500, 'Cannot write to file');
+        }
+
+        $this->publicURL = $this->buildPublicURL($filePath, $filename);
+    }
+
+    /**
+     * Copy an input stream to an output stream in fixed-size chunks,
+     * enforcing MAX_FILE_SIZE as we go. On any failure the partial temp
+     * file is removed and an error response is sent.
+     *
+     * @param resource $in
+     * @param resource $out
+     * @param string $tmpPath temp file to clean up on failure
+     * @return int bytes written
+     */
+    private function copyStream($in, $out, string $tmpPath): int
+    {
+        $written = 0;
+        while (!feof($in)) {
+            $chunk = fread($in, 8192);
+            if ($chunk === false)
+                break;
+
+            $written += strlen($chunk);
+            if ($written > MAX_FILE_SIZE) {
+                fclose($in);
+                fclose($out);
+                @unlink($tmpPath);
+                $this->sendError(400,
+                    'Max file size of '.MAX_FILE_SIZE.' bytes exceeded');
+            }
+
+            if (fwrite($out, $chunk) === false) {
+                fclose($in);
+                fclose($out);
+                @unlink($tmpPath);
+                $this->sendError(500, 'Cannot write to file');
+            }
+        }
+
+        return $written;
+    }
+
+    /**
+     * @param string $filePath
+     * @param string $filename
+     * @return string
+     */
+    private function buildPublicURL(string $filePath, string $filename): string
+    {
         $serverHost = $_SERVER['HTTP_HOST'];
         // Check if HTTPS is set and not empty in the $_SERVER array
         $protocol = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
 
-        $this->publicURL = "$protocol://$serverHost/$filePath$filename";
+        return "$protocol://$serverHost/$filePath$filename";
     }
 
     /**
@@ -105,7 +226,7 @@ class App
      * @param string $message
      * @return void
      */
-    private function sendError(int $code, string $message): void
+    #[NoReturn] private function sendError(int $code, string $message): void
     {
         http_response_code($code);
         echo json_encode([
