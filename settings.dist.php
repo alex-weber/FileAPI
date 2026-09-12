@@ -1,6 +1,7 @@
 <?php
 
 const API_KEY = 'your_api_key';
+const CORS_ALLOW_ORIGIN = '*';
 const UPLOAD_ROOT_DIR = 'uploads';
 const ALLOWED_FILE_EXT = [
     'image/jpeg' => 'jpg',

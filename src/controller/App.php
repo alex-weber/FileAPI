@@ -44,7 +44,7 @@ class App
     private function setCorsHeaders(): void
     {
         // Set headers to allow cross-origin requests (CORS)
-        header("Access-Control-Allow-Origin: *");
+        header("Access-Control-Allow-Origin: ".CORS_ALLOW_ORIGIN);
         header("Access-Control-Allow-Methods: POST");
         header("Access-Control-Allow-Headers: Content-Type, X-Api-Key");
         header('Content-Type: application/json');
